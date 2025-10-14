@@ -1,16 +1,16 @@
-﻿namespace Domain.Entities;
+﻿using Microsoft.AspNetCore.Identity;
 
-public class ApplicationUser
+namespace Domain.Entities;
+
+public class ApplicationUser : IdentityUser<Guid>
 {
-    public int Id { get; set; }
-
-    public string UserName { get; set; } = default!;
-    public string Email { get; set; } = default!;
-    public string PasswordHash { get; set; } = default!;
-
-    // Auditable
-    public DateTime CreatedAt { get; set; }
-    public DateTime UpdatedAt { get; set; }
-
-    public ApplicationUser() { } // For EF Core
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public Gender? Gender { get; set; }
+    public DateTimeOffset? BirthDate { get; set; }
+    public bool IsActived { get; set; }
+    public DateTimeOffset? LastPasswordChangedAt { get; set; }
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new HashSet<RefreshToken>();
 }
+
+public enum Gender { Male, Female }
