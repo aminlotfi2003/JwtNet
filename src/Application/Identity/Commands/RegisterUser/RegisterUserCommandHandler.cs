@@ -41,7 +41,8 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
             Gender = request.Gender,
             BirthDate = request.BirthDate,
             IsActived = true,
-            LastPasswordChangedAt = _clock.UtcNow
+            LastPasswordChangedAt = _clock.UtcNow,
+            LockoutEnabled = true
         };
 
         var result = await _userManager.CreateAsync(user, request.Password);

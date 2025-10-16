@@ -33,6 +33,9 @@ public static class ServiceCollectionExtensions
             options.Password.RequireUppercase = true;
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequiredLength = 8;
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
+            options.Lockout.MaxFailedAccessAttempts = 3;
         })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<JwtNetDbContext>()
@@ -70,6 +73,7 @@ public static class ServiceCollectionExtensions
 
         // Register Repositories
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+        services.AddScoped<IUserPasswordHistoryRepository, UserPasswordHistoryRepository>();
 
         return services;
     }

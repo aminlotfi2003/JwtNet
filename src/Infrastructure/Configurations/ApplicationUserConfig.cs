@@ -30,5 +30,10 @@ public class ApplicationUserConfig : IEntityTypeConfiguration<ApplicationUser>
             .WithOne(t => t.User)
             .HasForeignKey(x => x.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.PasswordHistories)
+            .WithOne(h => h.User)
+            .HasForeignKey(h => h.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

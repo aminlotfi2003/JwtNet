@@ -11,6 +11,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool IsActived { get; set; }
     public DateTimeOffset? LastPasswordChangedAt { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new HashSet<RefreshToken>();
+    public ICollection<UserPasswordHistory> PasswordHistories { get; set; } = new HashSet<UserPasswordHistory>();
 }
 
 public enum Gender { Male, Female }

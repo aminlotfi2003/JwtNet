@@ -32,7 +32,16 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
         if (user is null)
             throw new InvalidOperationException("Invalid email or password.");
 
+        if (!user.LockoutEnabled)
+        {
+            user.LockoutEnabled = true;
+            await _userManager.UpdateAsync(user);
+        }
+
         var signInResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+        if (signInResult.IsLockedOut)
+            throw new InvalidOperationException("Account locked due to multiple failed login attempts. Please try again later.");
+
         if (!signInResult.Succeeded)
             throw new InvalidOperationException("Invalid email or password.");
 
