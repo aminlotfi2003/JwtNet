@@ -12,6 +12,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public DateTimeOffset? LastPasswordChangedAt { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new HashSet<RefreshToken>();
     public ICollection<UserPasswordHistory> PasswordHistories { get; set; } = new HashSet<UserPasswordHistory>();
+    public ICollection<UserLoginHistory> LoginHistories { get; set; } = new HashSet<UserLoginHistory>();
 }
 
 public enum Gender { Male, Female }

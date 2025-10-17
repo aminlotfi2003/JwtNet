@@ -16,6 +16,7 @@ public class JwtNetDbContext
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<UserPasswordHistory> UserPasswordHistories => Set<UserPasswordHistory>();
+    public DbSet<UserLoginHistory> UserLoginHistories => Set<UserLoginHistory>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

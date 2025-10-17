@@ -12,18 +12,24 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IUserLoginHistoryRepository _loginHistories;
     private readonly ITokenService _tokenService;
+    private readonly IDateTimeProvider _clock;
 
     public LoginUserCommandHandler(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         IRefreshTokenRepository refreshTokens,
-        ITokenService tokenService)
+        IUserLoginHistoryRepository loginHistories,
+        ITokenService tokenService,
+        IDateTimeProvider clock)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _refreshTokens = refreshTokens;
+        _loginHistories = loginHistories;
         _tokenService = tokenService;
+        _clock = clock;
     }
 
     public async Task<AuthenticationResultDto> Handle(LoginUserCommand request, CancellationToken cancellationToken)
@@ -52,6 +58,15 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
 
         await _refreshTokens.AddAsync(refreshToken, cancellationToken);
         await _refreshTokens.SaveChangesAsync(cancellationToken);
+
+        var loginHistory = UserLoginHistory.Create(
+            user.Id,
+            _clock.UtcNow,
+            request.IpAddress,
+            request.UserAgent);
+
+        await _loginHistories.AddAsync(loginHistory, cancellationToken);
+        await _loginHistories.SaveChangesAsync(cancellationToken);
 
         return AuthenticationResultDto.FromTokenPair(tokenPair);
     }

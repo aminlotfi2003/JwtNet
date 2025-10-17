@@ -74,6 +74,7 @@ public static class ServiceCollectionExtensions
         // Register Repositories
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IUserPasswordHistoryRepository, UserPasswordHistoryRepository>();
+        services.AddScoped<IUserLoginHistoryRepository, UserLoginHistoryRepository>();
 
         return services;
     }

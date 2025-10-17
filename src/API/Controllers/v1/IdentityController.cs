@@ -6,6 +6,7 @@ using Application.Identity.Commands.LogoutUser;
 using Application.Identity.Commands.RefreshToken;
 using Application.Identity.Commands.RegisterUser;
 using Application.Identity.DTOs;
+using Application.Identity.Queries.GetUserLoginHistory;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -48,7 +49,14 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     {
         try
         {
-            var result = await _mediator.Send(new LoginUserCommand(request.Email, request.Password));
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = Request.Headers.UserAgent.ToString();
+
+            var result = await _mediator.Send(new LoginUserCommand(
+                request.Email,
+                request.Password,
+                ipAddress,
+                userAgent));
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -115,6 +123,17 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     {
         var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
         return Ok(result);
+    }
+    #endregion
+
+    #region Login History
+    [HttpGet("users/{userId:guid}/login-history")]
+    public async Task<ActionResult<IReadOnlyCollection<UserLoginHistoryDto>>> GetLoginHistory(
+        Guid userId,
+        [FromQuery] int count = 10)
+    {
+        var histories = await _mediator.Send(new GetUserLoginHistoryQuery(userId, count));
+        return Ok(histories);
     }
     #endregion
 }
