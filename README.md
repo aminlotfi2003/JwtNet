@@ -73,7 +73,6 @@ dotnet restore
      }
    }
    ```
-   【F:src/API/appsettings.json†L1-L18】
 2. Ensure the JWT signing key is at least 128 bits and kept out of source control.
 
 ### Apply Database Migrations
