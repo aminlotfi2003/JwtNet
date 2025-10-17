@@ -5,6 +5,9 @@ using Application.Identity.Commands.LoginUser;
 using Application.Identity.Commands.LogoutUser;
 using Application.Identity.Commands.RefreshToken;
 using Application.Identity.Commands.RegisterUser;
+using Application.Identity.Commands.TwoFactor.EnableEmailTwoFactor;
+using Application.Identity.Commands.TwoFactor.GenerateEmailTwoFactorToken;
+using Application.Identity.Commands.TwoFactor.VerifyTwoFactorLogin;
 using Application.Identity.DTOs;
 using Application.Identity.Queries.GetUserLoginHistory;
 using MediatR;
@@ -45,7 +48,7 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
 
     #region Login
     [HttpPost("login")]
-    public async Task<ActionResult<AuthenticationResultDto>> Login(LoginUserRequest request)
+    public async Task<ActionResult<LoginResultDto>> Login(LoginUserRequest request)
     {
         try
         {
@@ -57,6 +60,28 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
                 request.Password,
                 ipAddress,
                 userAgent));
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("login/two-factor")]
+    public async Task<ActionResult<AuthenticationResultDto>> VerifyTwoFactorLogin(VerifyTwoFactorLoginRequest request)
+    {
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = Request.Headers.UserAgent.ToString();
+
+            var result = await _mediator.Send(new VerifyTwoFactorLoginCommand(
+                request.UserId,
+                request.TwoFactorCode,
+                ipAddress,
+                userAgent));
+
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -91,7 +116,7 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     }
     #endregion
 
-    #region Change Password 
+    #region Change Password
     [HttpPost("users/{userId:guid}/password/rotate")]
     public async Task<ActionResult<AuthenticationResultDto>> RotatePasswordAfter90Days(
         Guid userId,
@@ -123,6 +148,36 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     {
         var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
         return Ok(result);
+    }
+    #endregion
+
+    #region Two-Factor Authentication
+    [HttpPost("users/{userId:guid}/two-factor/email/generate")]
+    public async Task<ActionResult<TwoFactorTokenDto>> GenerateEmailTwoFactorToken(Guid userId)
+    {
+        try
+        {
+            var token = await _mediator.Send(new GenerateEmailTwoFactorTokenCommand(userId));
+            return Ok(token);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("users/{userId:guid}/two-factor/email/enable")]
+    public async Task<IActionResult> EnableEmailTwoFactor(Guid userId, EnableEmailTwoFactorRequest request)
+    {
+        try
+        {
+            await _mediator.Send(new EnableEmailTwoFactorCommand(userId, request.TwoFactorCode));
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
     #endregion
 
