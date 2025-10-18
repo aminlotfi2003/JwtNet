@@ -1,17 +1,18 @@
-﻿using System.Text;
-using Application.Abstractions.Repositories;
+﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
 using Application.Identity.Options;
 using Domain.Entities;
 using Infrastructure.Contexts;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace Infrastructure.Extensions.DependencyInjection;
 
@@ -45,11 +46,17 @@ public static class ServiceCollectionExtensions
         var jwtOptions = new JwtOptions();
         configuration.GetSection(JwtOptions.SectionName).Bind(jwtOptions);
 
-        services.AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        })
+        var authenticationBuilder = services
+            .AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddCookie(IdentityConstants.ExternalScheme, options =>
+            {
+                options.Cookie.Name = "JwtNet.External";
+                options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            })
             .AddJwtBearer(options =>
             {
                 options.RequireHttpsMetadata = false;
@@ -67,9 +74,14 @@ public static class ServiceCollectionExtensions
                 };
             });
 
+        ConfigureGoogle(authenticationBuilder, configuration);
+        ConfigureMicrosoft(authenticationBuilder, configuration);
+        ConfigureGitHub(authenticationBuilder, configuration);
+
         // Register Services
         services.AddScoped<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IAuthenticationResultService, AuthenticationResultService>();
 
         // Register Repositories
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
@@ -77,5 +89,61 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserLoginHistoryRepository, UserLoginHistoryRepository>();
 
         return services;
+    }
+
+    private static void ConfigureGoogle(AuthenticationBuilder builder, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Authentication:Google");
+        var clientId = section["ClientId"];
+        var clientSecret = section["ClientSecret"];
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+            return;
+
+        builder.AddGoogle(options =>
+        {
+            options.ClientId = clientId;
+            options.ClientSecret = clientSecret;
+            options.SaveTokens = true;
+            options.Scope.Add("email");
+            options.Scope.Add("profile");
+        });
+    }
+
+    private static void ConfigureMicrosoft(AuthenticationBuilder builder, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Authentication:Microsoft");
+        var clientId = section["ClientId"];
+        var clientSecret = section["ClientSecret"];
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+            return;
+
+        builder.AddMicrosoftAccount(options =>
+        {
+            options.ClientId = clientId;
+            options.ClientSecret = clientSecret;
+            options.SaveTokens = true;
+            options.Scope.Add("email");
+            options.Scope.Add("profile");
+        });
+    }
+
+    private static void ConfigureGitHub(AuthenticationBuilder builder, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Authentication:GitHub");
+        var clientId = section["ClientId"];
+        var clientSecret = section["ClientSecret"];
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+            return;
+
+        builder.AddGitHub(options =>
+        {
+            options.ClientId = clientId;
+            options.ClientSecret = clientSecret;
+            options.SaveTokens = true;
+            options.Scope.Add("user:email");
+        });
     }
 }

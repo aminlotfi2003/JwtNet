@@ -1,5 +1,6 @@
 ﻿using API.Contracts.Identity;
 using Application.Identity.Commands.ChangePassword;
+using Application.Identity.Commands.ExternalLogin;
 using Application.Identity.Commands.ForgotPassword;
 using Application.Identity.Commands.LoginUser;
 using Application.Identity.Commands.LogoutUser;
@@ -10,7 +11,9 @@ using Application.Identity.Commands.TwoFactor.GenerateEmailTwoFactorToken;
 using Application.Identity.Commands.TwoFactor.VerifyTwoFactorLogin;
 using Application.Identity.DTOs;
 using Application.Identity.Queries.GetUserLoginHistory;
+using Domain.Entities;
 using MediatR;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers.v1;
@@ -18,9 +21,18 @@ namespace API.Controllers.v1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/identity")]
-public sealed class IdentityController(IMediator mediator) : ControllerBase
+public sealed class IdentityController : ControllerBase
 {
-    private readonly IMediator _mediator = mediator;
+    private readonly IMediator _mediator;
+    private readonly SignInManager<ApplicationUser> _signInManager;
+
+    public IdentityController(
+        IMediator mediator,
+        SignInManager<ApplicationUser> signInManager)
+    {
+        _mediator = mediator;
+        _signInManager = signInManager;
+    }
 
     #region Register
     [HttpPost("register")]
@@ -87,6 +99,43 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
         catch (InvalidOperationException ex)
         {
             return Unauthorized(new { message = ex.Message });
+        }
+    }
+    #endregion
+
+    #region External Login
+    [HttpGet("external/{provider}/challenge")]
+    public IActionResult ChallengeExternalLogin(string provider, [FromQuery] string? returnUrl = null)
+    {
+        var callbackUrl = Url.Action(
+            nameof(ExternalLoginCallback),
+            new { provider, returnUrl });
+
+        if (string.IsNullOrWhiteSpace(callbackUrl))
+            return BadRequest(new { message = "Unable to determine callback URL." });
+
+        var properties = _signInManager.ConfigureExternalAuthenticationProperties(provider, callbackUrl);
+        return Challenge(properties, provider);
+    }
+
+    [HttpGet("external/{provider}/callback")]
+    public async Task<ActionResult<AuthenticationResultDto>> ExternalLoginCallback(string provider)
+    {
+        try
+        {
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userAgent = Request.Headers.UserAgent.ToString();
+
+            var result = await _mediator.Send(new ExternalLoginCommand(
+                provider,
+                ipAddress,
+                userAgent));
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
     #endregion
