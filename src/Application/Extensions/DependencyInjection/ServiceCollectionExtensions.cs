@@ -1,4 +1,6 @@
-﻿using FluentValidation;
+﻿using Application.Common.Behaviors;
+using FluentValidation;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
@@ -14,6 +16,10 @@ public static class ServiceCollectionExtensions
 
         // Register Validations
         services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // Register Pipeline Behaviors
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationPipelineBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(XssGuardPipelineBehavior<,>));
 
         return services;
     }

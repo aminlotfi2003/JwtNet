@@ -26,23 +26,16 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("register")]
     public async Task<ActionResult<AuthenticationResultDto>> Register(RegisterUserRequest request)
     {
-        try
-        {
-            var result = await _mediator.Send(new RegisterUserCommand(
-                request.Email,
-                request.Password,
-                request.ConfirmPassword,
-                request.FirstName,
-                request.LastName,
-                request.Gender,
-                request.BirthDate));
+        var result = await _mediator.Send(new RegisterUserCommand(
+            request.Email,
+            request.Password,
+            request.ConfirmPassword,
+            request.FirstName,
+            request.LastName,
+            request.Gender,
+            request.BirthDate));
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new { message = ex.Message });
-        }
+        return Ok(result);
     }
     #endregion
 
@@ -50,44 +43,31 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<LoginResultDto>> Login(LoginUserRequest request)
     {
-        try
-        {
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var userAgent = Request.Headers.UserAgent.ToString();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
 
-            var result = await _mediator.Send(new LoginUserCommand(
-                request.Email,
-                request.Password,
-                ipAddress,
-                userAgent));
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        var result = await _mediator.Send(new LoginUserCommand(
+            request.Email,
+            request.Password,
+            ipAddress,
+            userAgent)
+        );
+        return Ok(result);
     }
 
     [HttpPost("login/two-factor")]
     public async Task<ActionResult<AuthenticationResultDto>> VerifyTwoFactorLogin(VerifyTwoFactorLoginRequest request)
     {
-        try
-        {
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            var userAgent = Request.Headers.UserAgent.ToString();
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
 
-            var result = await _mediator.Send(new VerifyTwoFactorLoginCommand(
-                request.UserId,
-                request.TwoFactorCode,
-                ipAddress,
-                userAgent));
+        var result = await _mediator.Send(new VerifyTwoFactorLoginCommand(
+            request.UserId,
+            request.TwoFactorCode,
+            ipAddress,
+            userAgent));
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        return Ok(result);
     }
     #endregion
 
@@ -95,15 +75,8 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("refresh")]
     public async Task<ActionResult<AuthenticationResultDto>> Refresh(RefreshTokenRequest request)
     {
-        try
-        {
-            var result = await _mediator.Send(new RefreshTokenCommand(request.RefreshToken));
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Unauthorized(new { message = ex.Message });
-        }
+        var result = await _mediator.Send(new RefreshTokenCommand(request.RefreshToken));
+        return Ok(result);
     }
     #endregion
 
@@ -122,23 +95,12 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
         Guid userId,
         ChangePasswordRequest request)
     {
-        try
-        {
-            var result = await _mediator.Send(new ChangePasswordCommand(
-                userId,
-                request.CurrentPassword,
-                request.NewPassword));
+        var result = await _mediator.Send(new ChangePasswordCommand(
+            userId,
+            request.CurrentPassword,
+            request.NewPassword));
 
-            return Ok(result);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Equals("User not found.", StringComparison.Ordinal))
-        {
-            return NotFound();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        return Ok(result);
     }
     #endregion
 
@@ -155,29 +117,15 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("users/{userId:guid}/two-factor/email/generate")]
     public async Task<ActionResult<TwoFactorTokenDto>> GenerateEmailTwoFactorToken(Guid userId)
     {
-        try
-        {
-            var token = await _mediator.Send(new GenerateEmailTwoFactorTokenCommand(userId));
-            return Ok(token);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var token = await _mediator.Send(new GenerateEmailTwoFactorTokenCommand(userId));
+        return Ok(token);
     }
 
     [HttpPost("users/{userId:guid}/two-factor/email/enable")]
     public async Task<IActionResult> EnableEmailTwoFactor(Guid userId, EnableEmailTwoFactorRequest request)
     {
-        try
-        {
-            await _mediator.Send(new EnableEmailTwoFactorCommand(userId, request.TwoFactorCode));
-            return NoContent();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        await _mediator.Send(new EnableEmailTwoFactorCommand(userId, request.TwoFactorCode));
+        return NoContent();
     }
     #endregion
 

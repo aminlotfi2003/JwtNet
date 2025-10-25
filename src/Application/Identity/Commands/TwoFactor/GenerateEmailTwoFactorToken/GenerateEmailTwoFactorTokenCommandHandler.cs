@@ -1,4 +1,5 @@
-﻿using Application.Identity.DTOs;
+﻿using Application.Common.Exceptions;
+using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -18,10 +19,10 @@ internal sealed class GenerateEmailTwoFactorTokenCommandHandler : IRequestHandle
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("User not found.");
+            throw new NotFoundException("User not found.");
 
         if (string.IsNullOrWhiteSpace(user.Email))
-            throw new InvalidOperationException("User email is not configured.");
+            throw new BadRequestException("User email is not configured.");
 
         var token = await _userManager.GenerateTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider);
         return new TwoFactorTokenDto(token);

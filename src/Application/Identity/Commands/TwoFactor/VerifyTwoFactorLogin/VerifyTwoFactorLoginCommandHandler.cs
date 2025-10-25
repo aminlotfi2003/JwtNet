@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
@@ -33,14 +34,14 @@ internal sealed class VerifyTwoFactorLoginCommandHandler : IRequestHandler<Verif
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("Invalid two-factor verification attempt.");
+            throw new UnauthorizedException("Invalid two-factor verification attempt.");
 
         if (!user.TwoFactorEnabled)
-            throw new InvalidOperationException("Two-factor authentication is not enabled for this account.");
+            throw new BadRequestException("Two-factor authentication is not enabled for this account.");
 
         var isValidToken = await _userManager.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider, request.Token);
         if (!isValidToken)
-            throw new InvalidOperationException("Invalid two-factor verification code.");
+            throw new UnauthorizedException("Invalid two-factor verification code.");
 
         await _userManager.ResetAccessFailedCountAsync(user);
 

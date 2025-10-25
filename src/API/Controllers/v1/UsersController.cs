@@ -37,15 +37,8 @@ public sealed class UsersController(IMediator mediator) : ControllerBase
     [HttpPost("{userId:guid}/activate")]
     public async Task<ActionResult<ApplicationUserDto>> ActivateUser(Guid userId)
     {
-        try
-        {
-            var user = await _mediator.Send(new ActivateUserCommand(userId));
-            return Ok(user);
-        }
-        catch (InvalidOperationException)
-        {
-            return NotFound();
-        }
+        var user = await _mediator.Send(new ActivateUserCommand(userId));
+        return Ok(user);
     }
     #endregion
 
@@ -53,15 +46,8 @@ public sealed class UsersController(IMediator mediator) : ControllerBase
     [HttpPost("{userId:guid}/deactivate")]
     public async Task<ActionResult<ApplicationUserDto>> DeactivateUser(Guid userId)
     {
-        try
-        {
-            var user = await _mediator.Send(new DeactivateUserCommand(userId));
-            return Ok(user);
-        }
-        catch (InvalidOperationException)
-        {
-            return NotFound();
-        }
+        var user = await _mediator.Send(new DeactivateUserCommand(userId));
+        return Ok(user);
     }
     #endregion
 }

@@ -1,4 +1,5 @@
 ﻿using Application.Abstractions.Repositories;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
@@ -23,7 +24,7 @@ internal sealed class DeactivateUserCommandHandler : IRequestHandler<DeactivateU
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("User not found.");
+            throw new NotFoundException("User not found.");
 
         if (user.IsActived)
         {
@@ -34,7 +35,7 @@ internal sealed class DeactivateUserCommandHandler : IRequestHandler<DeactivateU
             if (!result.Succeeded)
             {
                 var description = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"Unable to deactivate user: {description}");
+                throw new BadRequestException($"Unable to deactivate user: {description}");
             }
 
             await _refreshTokens.RevokeUserTokensAsync(user.Id, cancellationToken);

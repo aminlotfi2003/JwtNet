@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
@@ -36,7 +37,7 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
-            throw new InvalidOperationException("Invalid email or password.");
+            throw new UnauthorizedException("Invalid email or password.");
 
         if (!user.LockoutEnabled)
         {
@@ -46,7 +47,7 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
 
         var signInResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (signInResult.IsLockedOut)
-            throw new InvalidOperationException("Account locked due to multiple failed login attempts. Please try again later.");
+            throw new LockedException("Account locked due to multiple failed login attempts. Please try again later.");
 
         if (signInResult.RequiresTwoFactor)
         {
@@ -55,7 +56,7 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
         }
 
         if (!signInResult.Succeeded)
-            throw new InvalidOperationException("Invalid email or password.");
+            throw new UnauthorizedException("Invalid email or password.");
 
         var authenticationResult = await GenerateAuthenticationResultAsync(user, request.IpAddress, request.UserAgent, cancellationToken);
         return LoginResultDto.Success(authenticationResult);

@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
@@ -35,13 +36,13 @@ internal sealed class ChangePasswordCommandHandler : IRequestHandler<ChangePassw
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("User not found.");
+            throw new NotFoundException("User not found.");
 
         if (user.LastPasswordChangedAt.HasValue)
         {
             var elapsed = _clock.UtcNow - user.LastPasswordChangedAt.Value;
             if (elapsed < RequiredInterval)
-                throw new InvalidOperationException("Passwords can only be changed once every 90 days.");
+                throw new BadRequestException("Passwords can only be changed once every 90 days.");
         }
 
         var recentPasswords = await _passwordHistories.GetRecentAsync(user.Id, 5, cancellationToken);
@@ -50,14 +51,14 @@ internal sealed class ChangePasswordCommandHandler : IRequestHandler<ChangePassw
         {
             var verification = _userManager.PasswordHasher.VerifyHashedPassword(user, previous.PasswordHash, request.NewPassword);
             if (verification is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded)
-                throw new InvalidOperationException("New password cannot match any of the last five passwords.");
+                throw new BadRequestException("New password cannot match any of the last five passwords.");
         }
 
         if (!string.IsNullOrEmpty(user.PasswordHash))
         {
             var currentVerification = _userManager.PasswordHasher.VerifyHashedPassword(user, user.PasswordHash, request.NewPassword);
             if (currentVerification is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded)
-                throw new InvalidOperationException("New password cannot match any of the last five passwords.");
+                throw new BadRequestException("New password cannot match any of the last five passwords.");
         }
 
         var previousPasswordHash = user.PasswordHash;
@@ -66,7 +67,7 @@ internal sealed class ChangePasswordCommandHandler : IRequestHandler<ChangePassw
         if (!result.Succeeded)
         {
             var description = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new InvalidOperationException($"Unable to change password: {description}");
+            throw new BadRequestException($"Unable to change password: {description}");
         }
 
         user.LastPasswordChangedAt = _clock.UtcNow;

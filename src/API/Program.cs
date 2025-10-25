@@ -1,4 +1,5 @@
 using API.Extensions.DependencyInjection;
+using API.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,8 @@ app.UseHttpsRedirection();
 app.UseRouting();
 
 app.UseCors("AllowAll");
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseAuthentication();
 

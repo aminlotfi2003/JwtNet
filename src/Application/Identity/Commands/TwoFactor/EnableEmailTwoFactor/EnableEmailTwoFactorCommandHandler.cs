@@ -1,4 +1,5 @@
-﻿using Domain.Entities;
+﻿using Application.Common.Exceptions;
+using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 
@@ -17,14 +18,14 @@ internal sealed class EnableEmailTwoFactorCommandHandler : IRequestHandler<Enabl
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("User not found.");
+            throw new NotFoundException("User not found.");
 
         var isValidToken = await _userManager.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider, request.Token);
         if (!isValidToken)
-            throw new InvalidOperationException("Invalid two-factor verification code.");
+            throw new BadRequestException("Invalid two-factor verification code.");
 
         var result = await _userManager.SetTwoFactorEnabledAsync(user, true);
         if (!result.Succeeded)
-            throw new InvalidOperationException("Failed to enable two-factor authentication.");
+            throw new BadRequestException("Failed to enable two-factor authentication.");
     }
 }

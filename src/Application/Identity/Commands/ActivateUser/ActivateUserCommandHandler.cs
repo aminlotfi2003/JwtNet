@@ -1,4 +1,5 @@
-﻿using Application.Identity.DTOs;
+﻿using Application.Common.Exceptions;
+using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -18,7 +19,7 @@ internal sealed class ActivateUserCommandHandler : IRequestHandler<ActivateUserC
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new InvalidOperationException("User not found.");
+            throw new NotFoundException("User not found.");
 
         if (!user.IsActived)
         {
@@ -29,7 +30,7 @@ internal sealed class ActivateUserCommandHandler : IRequestHandler<ActivateUserC
             if (!result.Succeeded)
             {
                 var description = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new InvalidOperationException($"Unable to activate user: {description}");
+                throw new BadRequestException($"Unable to activate user: {description}");
             }
         }
 

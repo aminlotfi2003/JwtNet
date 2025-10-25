@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using Domain.Entities;
 using MediatR;
@@ -30,7 +31,7 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
     {
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser is not null)
-            throw new InvalidOperationException("A user with the provided email address already exists.");
+            throw new ConflictException("A user with the provided email address already exists.");
 
         var user = new ApplicationUser
         {
@@ -49,7 +50,7 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
         if (!result.Succeeded)
         {
             var description = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new InvalidOperationException($"Unable to register user: {description}");
+            throw new BadRequestException($"Unable to register user: {description}");
         }
 
         var tokenPair = _tokenService.GenerateTokenPair(user);

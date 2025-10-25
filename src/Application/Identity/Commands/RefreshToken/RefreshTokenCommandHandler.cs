@@ -1,5 +1,6 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
 using MediatR;
 
@@ -27,11 +28,11 @@ internal sealed class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenC
         var storedToken = await _refreshTokens.GetByTokenHashAsync(hashedToken, cancellationToken);
 
         if (storedToken is null || !storedToken.IsActive(_clock.UtcNow))
-            throw new InvalidOperationException("Invalid or expired refresh token.");
+            throw new UnauthorizedException("Invalid or expired refresh token.");
 
         storedToken.Revoke();
 
-        var user = storedToken.User ?? throw new InvalidOperationException("Refresh token is no longer associated with a user.");
+        var user = storedToken.User ?? throw new UnauthorizedException("Refresh token is no longer associated with a user.");
 
         var tokenPair = _tokenService.GenerateTokenPair(user);
         var newRefreshToken = Domain.Entities.RefreshToken.CreateHashed(
