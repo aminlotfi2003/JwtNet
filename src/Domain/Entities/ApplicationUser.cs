@@ -13,6 +13,7 @@ public class ApplicationUser : IdentityUser<Guid>
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new HashSet<RefreshToken>();
     public ICollection<UserPasswordHistory> PasswordHistories { get; set; } = new HashSet<UserPasswordHistory>();
     public ICollection<UserLoginHistory> LoginHistories { get; set; } = new HashSet<UserLoginHistory>();
+    public ICollection<PasswordResetCode> PasswordResetCodes { get; set; } = new HashSet<PasswordResetCode>();
 }
 
 public enum Gender { Male, Female }

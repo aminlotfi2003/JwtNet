@@ -70,11 +70,13 @@ public static class ServiceCollectionExtensions
         // Register Services
         services.AddScoped<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IPasswordResetCodeNotificationService, LoggingPasswordResetCodeNotificationService>();
 
         // Register Repositories
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IUserPasswordHistoryRepository, UserPasswordHistoryRepository>();
         services.AddScoped<IUserLoginHistoryRepository, UserLoginHistoryRepository>();
+        services.AddScoped<IPasswordResetCodeRepository, PasswordResetCodeRepository>();
 
         return services;
     }

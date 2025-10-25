@@ -5,6 +5,7 @@ using Application.Identity.Commands.LoginUser;
 using Application.Identity.Commands.LogoutUser;
 using Application.Identity.Commands.RefreshToken;
 using Application.Identity.Commands.RegisterUser;
+using Application.Identity.Commands.ResetPassword;
 using Application.Identity.Commands.TwoFactor.EnableEmailTwoFactor;
 using Application.Identity.Commands.TwoFactor.GenerateEmailTwoFactorToken;
 using Application.Identity.Commands.TwoFactor.VerifyTwoFactorLogin;
@@ -109,6 +110,30 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     public async Task<ActionResult<ForgotPasswordTokenDto>> ForgotPassword(ForgotPasswordRequest request)
     {
         var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
+        return Ok(result);
+    }
+    #endregion
+
+    #region Verify Reset Code
+    [HttpPost("forgot-password/verify")]
+    public async Task<ActionResult<PasswordResetCodeVerificationResultDto>> VerifyResetCode(VerifyResetCodeRequest request)
+    {
+        var result = await _mediator.Send(new VerifyResetCodeCommand(request.Email, request.VerificationCode));
+        return Ok(result);
+    }
+    #endregion
+
+    #region Reset Password
+    [HttpPost("reset-password")]
+    public async Task<ActionResult<PasswordResetResultDto>> ResetPassword(ResetPasswordRequest request)
+    {
+        var result = await _mediator.Send(new ResetPasswordCommand(
+            request.Email,
+            request.ResetToken,
+            request.VerificationCode,
+            request.NewPassword,
+            request.ConfirmPassword));
+
         return Ok(result);
     }
     #endregion

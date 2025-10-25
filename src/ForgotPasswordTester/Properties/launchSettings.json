@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ForgotPasswordTester": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
