@@ -2,6 +2,7 @@
 using Application.Abstractions.Services;
 using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -15,33 +16,65 @@ internal sealed class VerifyTwoFactorLoginCommandHandler : IRequestHandler<Verif
     private readonly IUserLoginHistoryRepository _loginHistories;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _clock;
+    private readonly IIdentityRateLimiter _rateLimiter;
 
     public VerifyTwoFactorLoginCommandHandler(
         UserManager<ApplicationUser> userManager,
         IRefreshTokenRepository refreshTokens,
         IUserLoginHistoryRepository loginHistories,
         ITokenService tokenService,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        IIdentityRateLimiter rateLimiter)
     {
         _userManager = userManager;
         _refreshTokens = refreshTokens;
         _loginHistories = loginHistories;
         _tokenService = tokenService;
         _clock = clock;
+        _rateLimiter = rateLimiter;
     }
 
     public async Task<AuthenticationResultDto> Handle(VerifyTwoFactorLoginCommand request, CancellationToken cancellationToken)
     {
+        var challengeKey = request.ChallengeId ?? request.UserId.ToString();
+        var accountKey = request.UserId.ToString();
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new UnauthorizedException("Invalid two-factor verification attempt.");
+        {
+            var outcome = await _rateLimiter.RegisterTwoFactorAttemptAsync(
+                new TwoFactorRateLimitContext(challengeKey, accountKey, request.IpAddress),
+                succeeded: false,
+                cancellationToken);
+            await ApplyOutcomeAsync(outcome, cancellationToken);
+            throw new UnauthorizedException(IdentityRateLimitMessages.GenericError);
+        }
 
         if (!user.TwoFactorEnabled)
-            throw new BadRequestException("Two-factor authentication is not enabled for this account.");
+        {
+            var outcome = await _rateLimiter.RegisterTwoFactorAttemptAsync(
+                new TwoFactorRateLimitContext(challengeKey, accountKey, request.IpAddress),
+                succeeded: false,
+                cancellationToken);
+            await ApplyOutcomeAsync(outcome, cancellationToken);
+            throw new BadRequestException(IdentityRateLimitMessages.GenericError);
+        }
 
         var isValidToken = await _userManager.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider, request.Token);
         if (!isValidToken)
-            throw new UnauthorizedException("Invalid two-factor verification code.");
+        {
+            var outcome = await _rateLimiter.RegisterTwoFactorAttemptAsync(
+                new TwoFactorRateLimitContext(challengeKey, accountKey, request.IpAddress),
+                succeeded: false,
+                cancellationToken);
+            await ApplyOutcomeAsync(outcome, cancellationToken);
+            throw new UnauthorizedException(IdentityRateLimitMessages.GenericError);
+        }
+
+        var successOutcome = await _rateLimiter.RegisterTwoFactorAttemptAsync(
+            new TwoFactorRateLimitContext(challengeKey, accountKey, request.IpAddress),
+            succeeded: true,
+            cancellationToken);
+        await ApplyOutcomeAsync(successOutcome, cancellationToken);
 
         await _userManager.ResetAccessFailedCountAsync(user);
 
@@ -63,5 +96,18 @@ internal sealed class VerifyTwoFactorLoginCommandHandler : IRequestHandler<Verif
         await _loginHistories.SaveChangesAsync(cancellationToken);
 
         return AuthenticationResultDto.FromTokenPair(tokenPair);
+    }
+
+    private static async Task ApplyOutcomeAsync(RateLimitOutcome outcome, CancellationToken cancellationToken)
+    {
+        if (!outcome.IsAllowed)
+        {
+            throw new RateLimitException(outcome.Action, outcome.RetryAfter, outcome.LockDuration);
+        }
+
+        if (outcome.Delay is { } delay)
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
     }
 }

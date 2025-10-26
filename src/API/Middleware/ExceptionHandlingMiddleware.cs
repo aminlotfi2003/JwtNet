@@ -2,6 +2,7 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using System.Globalization;
 using System.Net;
 
 namespace API.Middleware;
@@ -31,6 +32,10 @@ public sealed class ExceptionHandlingMiddleware
         catch (HttpException ex)
         {
             _logger.LogWarning(ex, "Request {Path} failed with status code {StatusCode}", context.Request.Path, ex.StatusCode);
+            if (ex is RateLimitException rateLimit)
+            {
+                AppendRateLimitHeaders(context.Response, rateLimit);
+            }
             await WriteProblemAsync(context, ex.StatusCode, ex.Message);
         }
         catch (Exception ex)
@@ -87,5 +92,22 @@ public sealed class ExceptionHandlingMiddleware
         };
 
         await context.Response.WriteAsJsonAsync(problem);
+    }
+
+    private static void AppendRateLimitHeaders(HttpResponse response, RateLimitException exception)
+    {
+        if (exception.RetryAfter is { } retryAfter)
+        {
+            var seconds = Math.Max(0, (int)Math.Ceiling(retryAfter.TotalSeconds));
+            response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+        }
+
+        response.Headers["X-RateLimit-Action"] = exception.Action.ToString();
+
+        if (exception.LockDuration is { } lockDuration)
+        {
+            var seconds = Math.Max(0, (int)Math.Ceiling(lockDuration.TotalSeconds));
+            response.Headers["X-RateLimit-Lock"] = seconds.ToString(CultureInfo.InvariantCulture);
+        }
     }
 }

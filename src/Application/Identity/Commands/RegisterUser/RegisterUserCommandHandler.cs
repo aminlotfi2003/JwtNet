@@ -2,6 +2,7 @@
 using Application.Abstractions.Services;
 using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -14,24 +15,45 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenRepository _refreshTokens;
     private readonly IDateTimeProvider _clock;
+    private readonly IIdentityRateLimiter _rateLimiter;
+    private readonly IDisposableEmailDomainService _disposableDomainService;
 
     public RegisterUserCommandHandler(
         UserManager<ApplicationUser> userManager,
         ITokenService tokenService,
         IRefreshTokenRepository refreshTokens,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        IIdentityRateLimiter rateLimiter,
+        IDisposableEmailDomainService disposableDomainService)
     {
         _userManager = userManager;
         _tokenService = tokenService;
         _refreshTokens = refreshTokens;
         _clock = clock;
+        _rateLimiter = rateLimiter;
+        _disposableDomainService = disposableDomainService;
     }
 
     public async Task<AuthenticationResultDto> Handle(RegisterUserCommand request, CancellationToken cancellationToken)
     {
+        var domain = ExtractDomain(request.Email);
+        var isDisposableDomain = domain is not null && _disposableDomainService.IsDisposable(domain);
+
+        var rateOutcome = await _rateLimiter.EnforceRegisterAsync(
+            new RegisterRateLimitContext(
+                request.IpAddress,
+                request.Asn,
+                domain,
+                request.TenantId,
+                isDisposableDomain),
+            cancellationToken);
+
+        await ApplyOutcomeAsync(rateOutcome, cancellationToken);
+
         var existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser is not null)
-            throw new ConflictException("A user with the provided email address already exists.");
+            throw new ConflictException(IdentityRateLimitMessages.GenericError);
+
 
         var user = new ApplicationUser
         {
@@ -50,7 +72,8 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
         if (!result.Succeeded)
         {
             var description = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new BadRequestException($"Unable to register user: {description}");
+            _ = description;
+            throw new BadRequestException(IdentityRateLimitMessages.GenericError);
         }
 
         var tokenPair = _tokenService.GenerateTokenPair(user);
@@ -60,5 +83,29 @@ internal sealed class RegisterUserCommandHandler : IRequestHandler<RegisterUserC
         await _refreshTokens.SaveChangesAsync(cancellationToken);
 
         return AuthenticationResultDto.FromTokenPair(tokenPair);
+    }
+
+    private static string? ExtractDomain(string email)
+    {
+        var atIndex = email.LastIndexOf('@');
+        if (atIndex <= 0 || atIndex == email.Length - 1)
+        {
+            return null;
+        }
+
+        return email[(atIndex + 1)..].ToLowerInvariant();
+    }
+
+    private static async Task ApplyOutcomeAsync(RateLimitOutcome outcome, CancellationToken cancellationToken)
+    {
+        if (!outcome.IsAllowed)
+        {
+            throw new RateLimitException(outcome.Action, outcome.RetryAfter, outcome.LockDuration);
+        }
+
+        if (outcome.Delay is { } delay)
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
     }
 }

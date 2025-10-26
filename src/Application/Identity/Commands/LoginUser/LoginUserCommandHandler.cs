@@ -2,6 +2,7 @@
 using Application.Abstractions.Services;
 using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -16,6 +17,7 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
     private readonly IUserLoginHistoryRepository _loginHistories;
     private readonly ITokenService _tokenService;
     private readonly IDateTimeProvider _clock;
+    private readonly IIdentityRateLimiter _rateLimiter;
 
     public LoginUserCommandHandler(
         SignInManager<ApplicationUser> signInManager,
@@ -23,7 +25,8 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
         IRefreshTokenRepository refreshTokens,
         IUserLoginHistoryRepository loginHistories,
         ITokenService tokenService,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        IIdentityRateLimiter rateLimiter)
     {
         _signInManager = signInManager;
         _userManager = userManager;
@@ -31,13 +34,24 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
         _loginHistories = loginHistories;
         _tokenService = tokenService;
         _clock = clock;
+        _rateLimiter = rateLimiter;
     }
 
     public async Task<LoginResultDto> Handle(LoginUserCommand request, CancellationToken cancellationToken)
     {
+        var normalizedEmail = NormalizeEmail(request.Email);
+        var rateContext = new LoginRateLimitContext(normalizedEmail, request.IpAddress, request.DeviceId, null, request.IsHighRisk);
+
+        var preOutcome = await _rateLimiter.CheckLoginAsync(rateContext, cancellationToken);
+        await ApplyOutcomeAsync(preOutcome, cancellationToken);
+
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
-            throw new UnauthorizedException("Invalid email or password.");
+        {
+            var resultOutcome = await _rateLimiter.RegisterLoginResultAsync(rateContext, LoginAttemptOutcome.FailedInvalidCredentials, cancellationToken);
+            await ApplyOutcomeAsync(resultOutcome, cancellationToken);
+            throw new UnauthorizedException(IdentityRateLimitMessages.GenericError);
+        }
 
         if (!user.LockoutEnabled)
         {
@@ -47,16 +61,29 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
 
         var signInResult = await _signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
         if (signInResult.IsLockedOut)
-            throw new LockedException("Account locked due to multiple failed login attempts. Please try again later.");
+        {
+            var lockedOutcome = await _rateLimiter.RegisterLoginResultAsync(rateContext, LoginAttemptOutcome.LockedOut, cancellationToken);
+            await ApplyOutcomeAsync(lockedOutcome, cancellationToken);
+            throw new LockedException(IdentityRateLimitMessages.GenericError);
+        }
 
         if (signInResult.RequiresTwoFactor)
         {
+            var twoFactorOutcome = await _rateLimiter.RegisterLoginResultAsync(rateContext, LoginAttemptOutcome.RequiresTwoFactor, cancellationToken);
+            await ApplyOutcomeAsync(twoFactorOutcome, cancellationToken);
             var twoFactorToken = await _userManager.GenerateTwoFactorTokenAsync(user, TokenOptions.DefaultEmailProvider);
             return LoginResultDto.RequiresTwoFactorResponse(user.Id, TokenOptions.DefaultEmailProvider, twoFactorToken);
         }
 
         if (!signInResult.Succeeded)
-            throw new UnauthorizedException("Invalid email or password.");
+        {
+            var failureOutcome = await _rateLimiter.RegisterLoginResultAsync(rateContext, LoginAttemptOutcome.FailedInvalidCredentials, cancellationToken);
+            await ApplyOutcomeAsync(failureOutcome, cancellationToken);
+            throw new UnauthorizedException(IdentityRateLimitMessages.GenericError);
+        }
+
+        var successOutcome = await _rateLimiter.RegisterLoginResultAsync(rateContext, LoginAttemptOutcome.Success, cancellationToken);
+        await ApplyOutcomeAsync(successOutcome, cancellationToken);
 
         var authenticationResult = await GenerateAuthenticationResultAsync(user, request.IpAddress, request.UserAgent, cancellationToken);
         return LoginResultDto.Success(authenticationResult);
@@ -87,5 +114,21 @@ internal sealed class LoginUserCommandHandler : IRequestHandler<LoginUserCommand
         await _loginHistories.SaveChangesAsync(cancellationToken);
 
         return AuthenticationResultDto.FromTokenPair(tokenPair);
+    }
+
+    private string NormalizeEmail(string email)
+        => _userManager.NormalizeEmail(email) ?? email.Trim().ToUpperInvariant();
+
+    private static async Task ApplyOutcomeAsync(RateLimitOutcome outcome, CancellationToken cancellationToken)
+    {
+        if (!outcome.IsAllowed)
+        {
+            throw new RateLimitException(outcome.Action, outcome.RetryAfter, outcome.LockDuration);
+        }
+
+        if (outcome.Delay is { } delay)
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
     }
 }

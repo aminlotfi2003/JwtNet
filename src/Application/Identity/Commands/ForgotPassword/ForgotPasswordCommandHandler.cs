@@ -2,7 +2,9 @@
 using System.Security.Cryptography;
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
+using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -17,21 +19,30 @@ internal sealed class ForgotPasswordCommandHandler : IRequestHandler<ForgotPassw
     private readonly IPasswordResetCodeRepository _resetCodes;
     private readonly IPasswordResetCodeNotificationService _notificationService;
     private readonly IDateTimeProvider _clock;
+    private readonly IIdentityRateLimiter _rateLimiter;
 
     public ForgotPasswordCommandHandler(
         UserManager<ApplicationUser> userManager,
         IPasswordResetCodeRepository resetCodes,
         IPasswordResetCodeNotificationService notificationService,
-        IDateTimeProvider clock)
+        IDateTimeProvider clock,
+        IIdentityRateLimiter rateLimiter)
     {
         _userManager = userManager;
         _resetCodes = resetCodes;
         _notificationService = notificationService;
         _clock = clock;
+        _rateLimiter = rateLimiter;
     }
 
     public async Task<ForgotPasswordTokenDto> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
     {
+        var accountKey = request.Email.Trim().ToLowerInvariant();
+        var rateOutcome = await _rateLimiter.RegisterForgotPasswordSendAsync(
+            new ForgotPasswordRateLimitContext(accountKey, request.IpAddress, request.TenantId),
+            cancellationToken);
+        await ApplyOutcomeAsync(rateOutcome, cancellationToken);
+
         var user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
         {
@@ -56,6 +67,19 @@ internal sealed class ForgotPasswordCommandHandler : IRequestHandler<ForgotPassw
         await _notificationService.NotifyAsync(user, token, verificationCode, expiresAt, cancellationToken);
 
         return ForgotPasswordTokenDto.SuccessWithToken(token, message, verificationCode);
+    }
+
+    private static async Task ApplyOutcomeAsync(RateLimitOutcome outcome, CancellationToken cancellationToken)
+    {
+        if (!outcome.IsAllowed)
+        {
+            throw new RateLimitException(outcome.Action, outcome.RetryAfter, outcome.LockDuration);
+        }
+
+        if (outcome.Delay is { } delay)
+        {
+            await Task.Delay(delay, cancellationToken);
+        }
     }
 
     private static string GenerateVerificationCode()

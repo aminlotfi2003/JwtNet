@@ -2,4 +2,4 @@
 
 namespace Application.Identity.Commands.LogoutUser;
 
-public sealed record LogoutUserCommand(string RefreshToken) : IRequest;
+public sealed record LogoutUserCommand(string RefreshToken, string? IpAddress) : IRequest;
