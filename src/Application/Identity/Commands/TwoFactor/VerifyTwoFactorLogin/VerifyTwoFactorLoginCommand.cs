@@ -7,5 +7,6 @@ public sealed record VerifyTwoFactorLoginCommand(
     Guid UserId,
     string Token,
     string? IpAddress,
-    string? UserAgent
+    string? UserAgent,
+    string? ChallengeId
 ) : IRequest<AuthenticationResultDto>;

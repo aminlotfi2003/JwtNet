@@ -6,5 +6,6 @@ namespace Application.Identity.Commands.ChangePassword;
 public sealed record ChangePasswordCommand(
     Guid UserId,
     string CurrentPassword,
-    string NewPassword
+    string NewPassword,
+    string? IpAddress
 ) : IRequest<AuthenticationResultDto>;

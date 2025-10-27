@@ -2,6 +2,7 @@
 using Application.Abstractions.Services;
 using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -32,7 +33,7 @@ internal sealed class AdminResetPasswordCommandHandler
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new NotFoundException("User not found.");
+            throw new NotFoundException(IdentityRateLimitMessages.GenericError);
 
         var recentPasswords = await _passwordHistories.GetRecentAsync(user.Id, 5, cancellationToken);
 
@@ -40,14 +41,14 @@ internal sealed class AdminResetPasswordCommandHandler
         {
             var verification = _userManager.PasswordHasher.VerifyHashedPassword(user, previous.PasswordHash, request.NewPassword);
             if (verification is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded)
-                throw new BadRequestException("New password cannot match any of the last five passwords.");
+                throw new BadRequestException(IdentityRateLimitMessages.GenericError);
         }
 
         if (!string.IsNullOrEmpty(user.PasswordHash))
         {
             var currentVerification = _userManager.PasswordHasher.VerifyHashedPassword(user, user.PasswordHash, request.NewPassword);
             if (currentVerification is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded)
-                throw new BadRequestException("New password cannot match the current password.");
+                throw new BadRequestException(IdentityRateLimitMessages.GenericError);
         }
 
         var previousPasswordHash = user.PasswordHash;
@@ -57,7 +58,8 @@ internal sealed class AdminResetPasswordCommandHandler
         if (!result.Succeeded)
         {
             var description = string.Join("; ", result.Errors.Select(e => e.Description));
-            throw new BadRequestException($"Unable to reset password: {description}");
+            _ = description;
+            throw new BadRequestException(IdentityRateLimitMessages.GenericError);
         }
 
         user.LastPasswordChangedAt = _clock.UtcNow;

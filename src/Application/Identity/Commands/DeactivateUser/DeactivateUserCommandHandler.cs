@@ -1,6 +1,7 @@
 ﻿using Application.Abstractions.Repositories;
 using Application.Common.Exceptions;
 using Application.Identity.DTOs;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -24,7 +25,7 @@ internal sealed class DeactivateUserCommandHandler : IRequestHandler<DeactivateU
     {
         var user = await _userManager.FindByIdAsync(request.UserId.ToString());
         if (user is null)
-            throw new NotFoundException("User not found.");
+            throw new NotFoundException(IdentityRateLimitMessages.GenericError);
 
         if (user.IsActived)
         {
@@ -35,7 +36,8 @@ internal sealed class DeactivateUserCommandHandler : IRequestHandler<DeactivateU
             if (!result.Succeeded)
             {
                 var description = string.Join("; ", result.Errors.Select(e => e.Description));
-                throw new BadRequestException($"Unable to deactivate user: {description}");
+                _ = description;
+                throw new BadRequestException(IdentityRateLimitMessages.GenericError);
             }
 
             await _refreshTokens.RevokeUserTokensAsync(user.Id, cancellationToken);

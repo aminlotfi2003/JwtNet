@@ -27,6 +27,9 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("register")]
     public async Task<ActionResult<AuthenticationResultDto>> Register(RegisterUserRequest request)
     {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var tenantId = Request.Headers.TryGetValue("X-Tenant-Id", out var tenantValues) ? tenantValues.ToString() : null;
+        var asn = Request.Headers.TryGetValue("X-ASN", out var asnValues) ? asnValues.ToString() : null;
         var result = await _mediator.Send(new RegisterUserCommand(
             request.Email,
             request.Password,
@@ -34,7 +37,11 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
             request.FirstName,
             request.LastName,
             request.Gender,
-            request.BirthDate));
+            request.BirthDate,
+            ipAddress,
+            asn,
+            tenantId)
+        );
 
         return Ok(result);
     }
@@ -46,12 +53,18 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var userAgent = Request.Headers.UserAgent.ToString();
-
+        var deviceId = Request.Headers.TryGetValue("X-Device-Id", out var deviceValues)
+            ? deviceValues.ToString()
+            : userAgent;
+        var isHighRisk = Request.Headers.TryGetValue("X-High-Risk", out var riskValues)
+            && bool.TryParse(riskValues.ToString(), out var risk) && risk;
         var result = await _mediator.Send(new LoginUserCommand(
             request.Email,
             request.Password,
             ipAddress,
-            userAgent)
+            userAgent,
+            deviceId,
+            isHighRisk)
         );
         return Ok(result);
     }
@@ -61,12 +74,16 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var userAgent = Request.Headers.UserAgent.ToString();
-
+        var challengeId = Request.Headers.TryGetValue("X-2FA-Challenge-Id", out var challengeValues)
+            ? challengeValues.ToString()
+            : null;
         var result = await _mediator.Send(new VerifyTwoFactorLoginCommand(
             request.UserId,
             request.TwoFactorCode,
             ipAddress,
-            userAgent));
+            userAgent,
+            challengeId)
+        );
 
         return Ok(result);
     }
@@ -76,7 +93,9 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("refresh")]
     public async Task<ActionResult<AuthenticationResultDto>> Refresh(RefreshTokenRequest request)
     {
-        var result = await _mediator.Send(new RefreshTokenCommand(request.RefreshToken));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var clientId = Request.Headers.TryGetValue("X-Client-Id", out var clientValues) ? clientValues.ToString() : null;
+        var result = await _mediator.Send(new RefreshTokenCommand(request.RefreshToken, ipAddress, clientId));
         return Ok(result);
     }
     #endregion
@@ -85,7 +104,8 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("logout")]
     public async Task<IActionResult> Logout(LogoutUserRequest request)
     {
-        await _mediator.Send(new LogoutUserCommand(request.RefreshToken));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        await _mediator.Send(new LogoutUserCommand(request.RefreshToken, ipAddress));
         return NoContent();
     }
     #endregion
@@ -99,7 +119,9 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
         var result = await _mediator.Send(new ChangePasswordCommand(
             userId,
             request.CurrentPassword,
-            request.NewPassword));
+            request.NewPassword,
+            HttpContext.Connection.RemoteIpAddress?.ToString())
+        );
 
         return Ok(result);
     }
@@ -109,7 +131,9 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("forgot-password")]
     public async Task<ActionResult<ForgotPasswordTokenDto>> ForgotPassword(ForgotPasswordRequest request)
     {
-        var result = await _mediator.Send(new ForgotPasswordCommand(request.Email));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var tenantId = Request.Headers.TryGetValue("X-Tenant-Id", out var tenantValues) ? tenantValues.ToString() : null;
+        var result = await _mediator.Send(new ForgotPasswordCommand(request.Email, ipAddress, tenantId));
         return Ok(result);
     }
     #endregion
@@ -118,7 +142,8 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("forgot-password/verify")]
     public async Task<ActionResult<PasswordResetCodeVerificationResultDto>> VerifyResetCode(VerifyResetCodeRequest request)
     {
-        var result = await _mediator.Send(new VerifyResetCodeCommand(request.Email, request.VerificationCode));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _mediator.Send(new VerifyResetCodeCommand(request.Email, request.VerificationCode, ipAddress));
         return Ok(result);
     }
     #endregion
@@ -127,12 +152,15 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("reset-password")]
     public async Task<ActionResult<PasswordResetResultDto>> ResetPassword(ResetPasswordRequest request)
     {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         var result = await _mediator.Send(new ResetPasswordCommand(
             request.Email,
             request.ResetToken,
             request.VerificationCode,
             request.NewPassword,
-            request.ConfirmPassword));
+            request.ConfirmPassword,
+            ipAddress)
+        );
 
         return Ok(result);
     }
@@ -142,14 +170,16 @@ public sealed class IdentityController(IMediator mediator) : ControllerBase
     [HttpPost("users/{userId:guid}/two-factor/email/generate")]
     public async Task<ActionResult<TwoFactorTokenDto>> GenerateEmailTwoFactorToken(Guid userId)
     {
-        var token = await _mediator.Send(new GenerateEmailTwoFactorTokenCommand(userId));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var token = await _mediator.Send(new GenerateEmailTwoFactorTokenCommand(userId, ipAddress));
         return Ok(token);
     }
 
     [HttpPost("users/{userId:guid}/two-factor/email/enable")]
     public async Task<IActionResult> EnableEmailTwoFactor(Guid userId, EnableEmailTwoFactorRequest request)
     {
-        await _mediator.Send(new EnableEmailTwoFactorCommand(userId, request.TwoFactorCode));
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        await _mediator.Send(new EnableEmailTwoFactorCommand(userId, request.TwoFactorCode, ipAddress));
         return NoContent();
     }
     #endregion

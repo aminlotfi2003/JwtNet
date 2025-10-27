@@ -2,8 +2,10 @@
 using Application.Abstractions.Repositories;
 using Application.Abstractions.Services;
 using Application.Identity.Options;
+using Application.Identity.RateLimiting;
 using Domain.Entities;
 using Infrastructure.Contexts;
+using Infrastructure.RateLimiting;
 using Infrastructure.Repositories;
 using Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -34,8 +36,8 @@ public static class ServiceCollectionExtensions
             options.Password.RequireNonAlphanumeric = false;
             options.Password.RequiredLength = 8;
             options.Lockout.AllowedForNewUsers = true;
-            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(10);
-            options.Lockout.MaxFailedAccessAttempts = 3;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.MaxFailedAccessAttempts = 10;
         })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<JwtNetDbContext>()
@@ -68,9 +70,12 @@ public static class ServiceCollectionExtensions
             });
 
         // Register Services
-        services.AddScoped<IDateTimeProvider, SystemDateTimeProvider>();
+        services.AddMemoryCache();
+        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IPasswordResetCodeNotificationService, LoggingPasswordResetCodeNotificationService>();
+        services.AddSingleton<IDisposableEmailDomainService, DisposableEmailDomainService>();
+        services.AddSingleton<IIdentityRateLimiter, InMemoryIdentityRateLimiter>();
 
         // Register Repositories
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();

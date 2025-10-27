@@ -7,5 +7,7 @@ public sealed record LoginUserCommand(
     string Email,
     string Password,
     string? IpAddress,
-    string? UserAgent
+    string? UserAgent,
+    string? DeviceId,
+    bool IsHighRisk
 ) : IRequest<LoginResultDto>;

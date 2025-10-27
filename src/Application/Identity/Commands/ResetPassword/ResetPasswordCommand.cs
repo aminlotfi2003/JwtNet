@@ -8,5 +8,6 @@ public sealed record ResetPasswordCommand(
     string ResetToken,
     string VerificationCode,
     string NewPassword,
-    string ConfirmPassword
+    string ConfirmPassword,
+    string? IpAddress
 ) : IRequest<PasswordResetResultDto>;

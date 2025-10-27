@@ -11,5 +11,8 @@ public sealed record RegisterUserCommand(
     string FirstName,
     string LastName,
     Gender Gender,
-    DateTimeOffset BirthDate
+    DateTimeOffset BirthDate,
+    string? IpAddress,
+    string? Asn,
+    string? TenantId
 ) : IRequest<AuthenticationResultDto>;
