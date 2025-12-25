@@ -128,4 +128,4 @@ The published image uses the multi-stage Dockerfile to produce a lightweight run
 - Harden production settings (strict CORS, HTTPS enforcement, secrets management) before deploying.
 
 ## License
-This project is provided as-is for educational purposes. Update this section with your preferred license before shipping.
+This project is licensed under the MIT License.
